@@ -24,6 +24,8 @@ The business defaults are intentionally preserved:
 - console enabled: `true`
 - console service type: `NodePort`
 - console nodePort: `30092`
+- metrics: `enabled`
+- ServiceMonitor: `enabled`
 
 ## Layout
 
@@ -71,13 +73,10 @@ Install with the preserved defaults:
 ./minio-cluster-installer-amd64.run install -y
 ```
 
-Install and enable Prometheus operator integration:
+Install with the preserved defaults, including Prometheus operator integration:
 
 ```bash
-./minio-cluster-installer-amd64.run install \
-  --enable-metrics \
-  --enable-servicemonitor \
-  -y
+./minio-cluster-installer-amd64.run install -y
 ```
 
 Reuse images already present in the target registry:
@@ -103,12 +102,12 @@ Uninstall:
 
 ## Monitoring
 
-The chart defaults are preserved, so monitoring stays opt-in:
+Monitoring is enabled by default:
 
 - `--enable-metrics` enables MinIO metrics endpoint exposure
 - `--enable-servicemonitor` creates a `ServiceMonitor`
-- when `ServiceMonitor` is enabled, the installer also adds
-  `monitoring.archinfra.io/stack=default` for automatic discovery by the platform Prometheus stack
+- the installer and chart both add `monitoring.archinfra.io/stack=default` for automatic discovery by the platform Prometheus stack
+- `--disable-metrics` also disables `ServiceMonitor`
 - if the cluster does not contain the `ServiceMonitor` CRD, the installer warns and downgrades automatically
 
 ## GitHub Actions Release Flow

@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 APP_NAME="minio-cluster"
-APP_VERSION="0.1.1"
+APP_VERSION="0.1.2"
 PACKAGE_PROFILE="integrated"
 WORKDIR="/tmp/${APP_NAME}-installer"
 CHART_DIR="${WORKDIR}/charts/minio"
@@ -25,8 +25,8 @@ API_NODE_PORT="30093"
 CONSOLE_ENABLED="true"
 CONSOLE_SERVICE_TYPE="NodePort"
 CONSOLE_NODE_PORT="30092"
-ENABLE_METRICS="false"
-ENABLE_SERVICEMONITOR="false"
+ENABLE_METRICS="true"
+ENABLE_SERVICEMONITOR="true"
 SERVICE_MONITOR_NAMESPACE=""
 SERVICE_MONITOR_INTERVAL="30s"
 SERVICE_MONITOR_SCRAPE_TIMEOUT=""
@@ -270,10 +270,12 @@ parse_args() {
         ;;
       --disable-metrics)
         ENABLE_METRICS="false"
+        ENABLE_SERVICEMONITOR="false"
         shift
         ;;
       --enable-servicemonitor)
         ENABLE_SERVICEMONITOR="true"
+        ENABLE_METRICS="true"
         shift
         ;;
       --disable-servicemonitor)
