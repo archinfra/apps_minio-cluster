@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 APP_NAME="minio-cluster"
-APP_VERSION="0.1.0"
+APP_VERSION="0.1.1"
 PACKAGE_PROFILE="integrated"
 WORKDIR="/tmp/${APP_NAME}-installer"
 CHART_DIR="${WORKDIR}/charts/minio"
@@ -21,10 +21,10 @@ DRIVES_PER_NODE="1"
 MINIO_STORAGE_CLASS="nfs"
 MINIO_STORAGE_SIZE="500Gi"
 SERVICE_TYPE="NodePort"
-API_NODE_PORT="9000"
+API_NODE_PORT="30093"
 CONSOLE_ENABLED="true"
 CONSOLE_SERVICE_TYPE="NodePort"
-CONSOLE_NODE_PORT="9090"
+CONSOLE_NODE_PORT="30092"
 ENABLE_METRICS="false"
 ENABLE_SERVICEMONITOR="false"
 SERVICE_MONITOR_NAMESPACE=""
@@ -450,6 +450,21 @@ check_deps() {
   fi
 }
 
+is_valid_nodeport() {
+  [[ "$1" =~ ^[0-9]+$ ]] || return 1
+  (( "$1" >= 30000 && "$1" <= 32767 ))
+}
+
+validate_runtime_config() {
+  if [[ "${SERVICE_TYPE}" == "NodePort" || "${SERVICE_TYPE}" == "LoadBalancer" ]]; then
+    is_valid_nodeport "${API_NODE_PORT}" || die "API NodePort must be in range 30000-32767, got: ${API_NODE_PORT}"
+  fi
+
+  if [[ "${CONSOLE_ENABLED}" == "true" && ( "${CONSOLE_SERVICE_TYPE}" == "NodePort" || "${CONSOLE_SERVICE_TYPE}" == "LoadBalancer" ) ]]; then
+    is_valid_nodeport "${CONSOLE_NODE_PORT}" || die "Console NodePort must be in range 30000-32767, got: ${CONSOLE_NODE_PORT}"
+  fi
+}
+
 confirm() {
   [[ "${AUTO_YES}" == "true" ]] && return 0
 
@@ -791,6 +806,7 @@ show_status() {
 main() {
   parse_args "$@"
   normalize_flags
+  validate_runtime_config
   banner
 
   case "${ACTION}" in

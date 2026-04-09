@@ -20,10 +20,10 @@ The business defaults are intentionally preserved:
 - storage class: `nfs`
 - storage size: `500Gi`
 - API service type: `NodePort`
-- API nodePort: `9000`
+- API nodePort: `30093`
 - console enabled: `true`
 - console service type: `NodePort`
-- console nodePort: `9090`
+- console nodePort: `30092`
 
 ## Layout
 
