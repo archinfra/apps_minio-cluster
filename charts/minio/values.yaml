@@ -907,13 +907,14 @@ metrics:
   prometheusRule:
     ## @param metrics.prometheusRule.enabled Create a Prometheus Operator PrometheusRule (also requires `metrics.enabled` to be `true` and `metrics.prometheusRule.rules`)
     ##
-    enabled: false
+    enabled: true
     ## @param metrics.prometheusRule.namespace Namespace for the PrometheusRule Resource (defaults to the Release Namespace)
     ##
     namespace: ""
     ## @param metrics.prometheusRule.additionalLabels Additional labels that can be used so PrometheusRule will be discovered by Prometheus
     ##
-    additionalLabels: {}
+    additionalLabels:
+      monitoring.archinfra.io/stack: default
     ## @param metrics.prometheusRule.rules Prometheus Rule definitions
     # - alert: minio cluster nodes offline
     #   annotations:
@@ -925,7 +926,46 @@ metrics:
     #     severity: critical
     #     group: PaaS
     ##
-    rules: []
+    rules:
+      - alert: MinIONodesOffline
+        annotations:
+          summary: MinIO nodes offline
+          description: MinIO cluster has offline nodes for more than 10 minutes.
+        expr: minio_cluster_nodes_offline_total > 0
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+      - alert: MinIOCapacityLow
+        annotations:
+          summary: MinIO free capacity is low
+          description: MinIO cluster free raw capacity has stayed below 15% for 15 minutes.
+        expr: |
+          (
+            sum(minio_cluster_capacity_raw_free_bytes{namespace="{{ .Release.Namespace }}"})
+            /
+            clamp_min(sum(minio_cluster_capacity_raw_total_bytes{namespace="{{ .Release.Namespace }}"}), 1)
+          ) * 100 < 15
+        for: 15m
+        labels:
+          severity: warning
+          category: capacity
+      - alert: MinIOS3ErrorsDetected
+        annotations:
+          summary: MinIO S3 errors detected
+          description: MinIO cluster has returned S3 request errors in the last 10 minutes.
+        expr: increase(minio_s3_requests_errors_total{namespace="{{ .Release.Namespace }}"}[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          category: reliability
+  dashboards:
+    enabled: true
+    labels:
+      grafana_dashboard: "1"
+      monitoring.archinfra.io/stack: default
+    annotations:
+      grafana_folder: Middleware/MinIO
 
 ## @section MinIO&reg; Console parameters
 

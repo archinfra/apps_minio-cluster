@@ -463,3 +463,39 @@ kubectl logs -n aict minio-0
 - 这套仓库保留了你原来设定的默认业务参数
 - 运行时不要求目标机器安装 `jq`
 - `ServiceMonitor` 缺失时会自动降级，不会影响 MinIO 主流程安装
+## Built-in Monitoring, Alerts, And Dashboards
+
+Default install now enables:
+
+- `metrics.enabled=true`
+- `metrics.serviceMonitor.enabled=true`
+- `metrics.prometheusRule.enabled=true`
+
+Default monitoring resources:
+
+- `ServiceMonitor`
+- `PrometheusRule`
+- Grafana dashboard `ConfigMap`
+
+Grafana auto-import contract:
+
+- dashboard label: `grafana_dashboard=1`
+- platform label: `monitoring.archinfra.io/stack=default`
+- folder annotation: `grafana_folder=Middleware/MinIO`
+
+Built-in alerts:
+
+- `MinIONodesOffline`
+- `MinIOCapacityLow`
+- `MinIOS3ErrorsDetected`
+
+Built-in dashboard panels:
+
+- Online Nodes
+- Offline Nodes
+- Free Raw Capacity
+- Free Capacity Ratio
+- Raw Capacity
+- S3 Request Rate
+
+If the cluster does not provide the `PrometheusRule` CRD, the installer automatically disables rule creation so the main MinIO deployment can still succeed.

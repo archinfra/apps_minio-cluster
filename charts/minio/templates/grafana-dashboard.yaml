@@ -1,0 +1,189 @@
+{{- if and .Values.metrics.enabled .Values.metrics.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-dashboard
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" .) | nindent 4 }}
+    {{- if .Values.metrics.dashboards.labels }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.metrics.dashboards.labels "context" .) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.metrics.dashboards.annotations }}
+  annotations: {{- include "common.tplvalues.render" (dict "value" .Values.metrics.dashboards.annotations "context" .) | nindent 4 }}
+  {{- end }}
+data:
+  minio-overview.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 6,
+            "x": 0,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(minio_cluster_nodes_online_total{namespace=\"{{ .Release.Namespace }}\"})",
+              "refId": "A"
+            }
+          ],
+          "title": "Online Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 6,
+            "x": 6,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(minio_cluster_nodes_offline_total{namespace=\"{{ .Release.Namespace }}\"})",
+              "refId": "A"
+            }
+          ],
+          "title": "Offline Nodes",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 6,
+            "x": 12,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(minio_cluster_capacity_raw_free_bytes{namespace=\"{{ .Release.Namespace }}\"})",
+              "refId": "A"
+            }
+          ],
+          "title": "Free Raw Capacity",
+          "type": "stat",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 6,
+            "x": 18,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "(sum(minio_cluster_capacity_raw_free_bytes{namespace=\"{{ .Release.Namespace }}\"}) / clamp_min(sum(minio_cluster_capacity_raw_total_bytes{namespace=\"{{ .Release.Namespace }}\"}), 1)) * 100",
+              "refId": "A"
+            }
+          ],
+          "title": "Free Capacity Ratio",
+          "type": "stat",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(minio_cluster_capacity_raw_total_bytes{namespace=\"{{ .Release.Namespace }}\"})",
+              "legendFormat": "total",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(minio_cluster_capacity_raw_free_bytes{namespace=\"{{ .Release.Namespace }}\"})",
+              "legendFormat": "free",
+              "refId": "B"
+            }
+          ],
+          "title": "Raw Capacity",
+          "type": "timeseries",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(minio_s3_requests_total{namespace=\"{{ .Release.Namespace }}\"}[5m]))",
+              "legendFormat": "requests/s",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(minio_s3_requests_errors_total{namespace=\"{{ .Release.Namespace }}\"}[5m]))",
+              "legendFormat": "errors/s",
+              "refId": "B"
+            }
+          ],
+          "title": "S3 Request Rate",
+          "type": "timeseries"
+        }
+      ],
+      "schemaVersion": 39,
+      "style": "dark",
+      "tags": [
+        "archinfra",
+        "minio"
+      ],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "title": "MinIO Cluster Overview",
+      "version": 1
+    }
+{{- end }}
