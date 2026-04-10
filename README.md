@@ -64,6 +64,7 @@ MinIO 集群离线交付仓库。
 - console NodePort: `30092`
 - metrics: `true`
 - ServiceMonitor: `true`
+- resource profile: `mid`
 - ServiceMonitor interval: `30s`
 - target registry repo: `sealos.hub:5000/kube4`
 - image pull policy: `IfNotPresent`
@@ -170,6 +171,27 @@ MinIO 默认会创建带统一标签的 `ServiceMonitor`：
 - Memory request: `1Gi`
 - CPU limit: `4`
 - Memory limit: `8Gi`
+
+Installer resource profiles:
+
+- `low`: demo or lightweight validation
+- `mid`: default profile, normal shared environment, baseline for `500-1000` concurrency and about `10000` users
+- `high`: higher throughput or larger object workload
+
+Command line:
+
+- `--resource-profile low`
+- `--resource-profile mid`
+- `--resource-profile midd`
+- `--resource-profile high`
+
+Per-profile baseline:
+
+| Profile | MinIO data pod | Console | Provisioning / mc job |
+| --- | --- | --- | --- |
+| `low` | `200m / 512Mi` request, `1 / 2Gi` limit | `50m / 128Mi` request, `200m / 256Mi` limit | `20m / 32Mi` request, `100m / 128Mi` limit |
+| `mid` | `500m / 1Gi` request, `4 / 8Gi` limit | `100m / 256Mi` request, `500m / 512Mi` limit | `50m / 64Mi` request, `200m / 256Mi` limit |
+| `high` | `1 / 2Gi` request, `8 / 16Gi` limit | `200m / 512Mi` request, `1 / 1Gi` limit | `100m / 128Mi` request, `500m / 512Mi` limit |
 
 ### MinIO Console
 

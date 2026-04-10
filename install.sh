@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 APP_NAME="minio-cluster"
-APP_VERSION="0.1.2"
+APP_VERSION="0.1.3"
 PACKAGE_PROFILE="integrated"
 WORKDIR="/tmp/${APP_NAME}-installer"
 CHART_DIR="${WORKDIR}/charts/minio"
@@ -25,6 +25,7 @@ API_NODE_PORT="30093"
 CONSOLE_ENABLED="true"
 CONSOLE_SERVICE_TYPE="NodePort"
 CONSOLE_NODE_PORT="30092"
+RESOURCE_PROFILE="mid"
 ENABLE_METRICS="true"
 ENABLE_SERVICEMONITOR="true"
 SERVICE_MONITOR_NAMESPACE=""
@@ -126,6 +127,7 @@ Core options:
   --api-node-port <port>               API NodePort, default: ${API_NODE_PORT}
   --console-service-type <type>        Console service type, default: ${CONSOLE_SERVICE_TYPE}
   --console-node-port <port>           Console NodePort, default: ${CONSOLE_NODE_PORT}
+  --resource-profile <name>            Resource profile: low|mid|midd|high, default: ${RESOURCE_PROFILE}
   --disable-console                    Disable MinIO console
 
 Monitoring:
@@ -169,6 +171,7 @@ Other:
 
 Examples:
   ${cmd} install -y
+  ${cmd} install --resource-profile high -y
   ${cmd} install --service-type ClusterIP --disable-console -y
   ${cmd} install --enable-metrics --enable-servicemonitor -y
   ${cmd} install --registry harbor.example.com/kube4 --skip-image-prepare -y
@@ -258,6 +261,11 @@ parse_args() {
       --console-node-port)
         [[ $# -ge 2 ]] || die "Missing value for $1"
         CONSOLE_NODE_PORT="$2"
+        shift 2
+        ;;
+      --resource-profile)
+        [[ $# -ge 2 ]] || die "Missing value for $1"
+        RESOURCE_PROFILE="$2"
         shift 2
         ;;
       --disable-console)
@@ -442,6 +450,45 @@ normalize_flags() {
   if [[ "${ENABLE_SERVICEMONITOR}" == "true" ]]; then
     ENABLE_METRICS="true"
   fi
+
+  case "${RESOURCE_PROFILE,,}" in
+    low)
+      RESOURCE_PROFILE="low"
+      if [[ "${MINIO_REQUEST_CPU}" == "500m" ]]; then MINIO_REQUEST_CPU="200m"; fi
+      if [[ "${MINIO_REQUEST_MEM}" == "1Gi" ]]; then MINIO_REQUEST_MEM="512Mi"; fi
+      if [[ "${MINIO_LIMIT_CPU}" == "4" ]]; then MINIO_LIMIT_CPU="1"; fi
+      if [[ "${MINIO_LIMIT_MEM}" == "8Gi" ]]; then MINIO_LIMIT_MEM="2Gi"; fi
+      if [[ "${MINIO_CONSOLE_REQUEST_CPU}" == "100m" ]]; then MINIO_CONSOLE_REQUEST_CPU="50m"; fi
+      if [[ "${MINIO_CONSOLE_REQUEST_MEM}" == "256Mi" ]]; then MINIO_CONSOLE_REQUEST_MEM="128Mi"; fi
+      if [[ "${MINIO_CONSOLE_LIMIT_CPU}" == "500m" ]]; then MINIO_CONSOLE_LIMIT_CPU="200m"; fi
+      if [[ "${MINIO_CONSOLE_LIMIT_MEM}" == "512Mi" ]]; then MINIO_CONSOLE_LIMIT_MEM="256Mi"; fi
+      if [[ "${MINIO_MC_REQUEST_CPU}" == "50m" ]]; then MINIO_MC_REQUEST_CPU="20m"; fi
+      if [[ "${MINIO_MC_REQUEST_MEM}" == "64Mi" ]]; then MINIO_MC_REQUEST_MEM="32Mi"; fi
+      if [[ "${MINIO_MC_LIMIT_CPU}" == "200m" ]]; then MINIO_MC_LIMIT_CPU="100m"; fi
+      if [[ "${MINIO_MC_LIMIT_MEM}" == "256Mi" ]]; then MINIO_MC_LIMIT_MEM="128Mi"; fi
+      ;;
+    mid|midd|middle|medium)
+      RESOURCE_PROFILE="mid"
+      ;;
+    high)
+      RESOURCE_PROFILE="high"
+      if [[ "${MINIO_REQUEST_CPU}" == "500m" ]]; then MINIO_REQUEST_CPU="1"; fi
+      if [[ "${MINIO_REQUEST_MEM}" == "1Gi" ]]; then MINIO_REQUEST_MEM="2Gi"; fi
+      if [[ "${MINIO_LIMIT_CPU}" == "4" ]]; then MINIO_LIMIT_CPU="8"; fi
+      if [[ "${MINIO_LIMIT_MEM}" == "8Gi" ]]; then MINIO_LIMIT_MEM="16Gi"; fi
+      if [[ "${MINIO_CONSOLE_REQUEST_CPU}" == "100m" ]]; then MINIO_CONSOLE_REQUEST_CPU="200m"; fi
+      if [[ "${MINIO_CONSOLE_REQUEST_MEM}" == "256Mi" ]]; then MINIO_CONSOLE_REQUEST_MEM="512Mi"; fi
+      if [[ "${MINIO_CONSOLE_LIMIT_CPU}" == "500m" ]]; then MINIO_CONSOLE_LIMIT_CPU="1"; fi
+      if [[ "${MINIO_CONSOLE_LIMIT_MEM}" == "512Mi" ]]; then MINIO_CONSOLE_LIMIT_MEM="1Gi"; fi
+      if [[ "${MINIO_MC_REQUEST_CPU}" == "50m" ]]; then MINIO_MC_REQUEST_CPU="100m"; fi
+      if [[ "${MINIO_MC_REQUEST_MEM}" == "64Mi" ]]; then MINIO_MC_REQUEST_MEM="128Mi"; fi
+      if [[ "${MINIO_MC_LIMIT_CPU}" == "200m" ]]; then MINIO_MC_LIMIT_CPU="500m"; fi
+      if [[ "${MINIO_MC_LIMIT_MEM}" == "256Mi" ]]; then MINIO_MC_LIMIT_MEM="512Mi"; fi
+      ;;
+    *)
+      die "Unsupported resource profile: ${RESOURCE_PROFILE}. Expected low|mid|midd|high"
+      ;;
+  esac
 }
 
 check_deps() {
@@ -482,6 +529,7 @@ confirm() {
     echo "Storage size            : ${MINIO_STORAGE_SIZE}"
     echo "Service type            : ${SERVICE_TYPE}"
     echo "Console enabled         : ${CONSOLE_ENABLED}"
+    echo "Resource profile        : ${RESOURCE_PROFILE}"
     echo "Metrics                 : ${ENABLE_METRICS}"
     echo "ServiceMonitor          : ${ENABLE_SERVICEMONITOR}"
     echo "Registry repo           : ${REGISTRY_REPO}"
