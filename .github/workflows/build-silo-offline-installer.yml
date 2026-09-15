@@ -11,10 +11,10 @@ on:
       - "scripts/silo-mc-smoke.sh"
       - "charts/silo/**"
       - "images/silo-image-index.tsv"
-      - "docs/SILO_BASELINE.md"
-      - "docs/SILO_RELEASE_0.2.0.md"
+      - "docs/**"
       - "THIRD_PARTY_NOTICES.md"
       - ".github/workflows/build-silo-offline-installer.yml"
+      - "README.md"
   push:
     branches: [main, master]
     tags: ["silo-v*"]
@@ -26,10 +26,10 @@ on:
       - "scripts/silo-mc-smoke.sh"
       - "charts/silo/**"
       - "images/silo-image-index.tsv"
-      - "docs/SILO_BASELINE.md"
-      - "docs/SILO_RELEASE_0.2.0.md"
+      - "docs/**"
       - "THIRD_PARTY_NOTICES.md"
       - ".github/workflows/build-silo-offline-installer.yml"
+      - "README.md"
 
 permissions:
   contents: write
@@ -48,7 +48,7 @@ jobs:
         run: |
           grep -Eq '^SILO_SOURCE_COMMIT=[0-9a-f]{40}$' SILO_SOURCE.env
           grep -q '^SILO_SECURITY_ADVISORY=SN-2026-011$' SILO_SOURCE.env
-          test "$(cat VERSION)" = "0.2.0"
+          test "$(cat VERSION)" = "0.2.1"
       - name: Helm lint and render
         run: |
           helm lint charts/silo
@@ -57,6 +57,16 @@ jobs:
             --set auth.existingSecret=silo-root-credentials \
             --set replicas=4 >/tmp/silo.yaml
           test -s /tmp/silo.yaml
+          grep -q 'nodePort: 30093' /tmp/silo.yaml
+          grep -q 'nodePort: 30092' /tmp/silo.yaml
+          grep -q 'path: "/minio/metrics/v3"' /tmp/silo.yaml
+          grep -q 'grafana_dashboard:' /tmp/silo.yaml
+          grep -q 'SILO Cluster Overview' /tmp/silo.yaml
+          grep -q 'alert: SiloMetricsAbsent' /tmp/silo.yaml
+          grep -q 'alert: SiloCapacityCritical' /tmp/silo.yaml
+          grep -q 'alert: SiloErasureSetUnhealthy' /tmp/silo.yaml
+          grep -q 'minio_cluster_health_nodes_online_count' /tmp/silo.yaml
+          ! grep -q '/minio/v2/metrics/node' /tmp/silo.yaml
 
   build:
     needs: static-validation
