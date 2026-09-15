@@ -21,7 +21,7 @@ auth:
 service:
   type: NodePort
   port: 9000
-  nodePort: 30093
+  nodePort: 30095
   annotations: {}
 
 console:
