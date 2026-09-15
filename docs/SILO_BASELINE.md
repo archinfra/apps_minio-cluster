@@ -2,112 +2,57 @@
 
 ## Decision
 
-New object-storage deliveries use PGSTY SILO as the maintained MinIO-compatible backend.
-The legacy Bitnami MinIO path remains only for rollback and controlled migration work.
+New object-storage deliveries use PGSTY SILO as the maintained MinIO-compatible backend. The legacy Bitnami MinIO path remains only for rollback and controlled migration work.
 
-Archinfra release `0.2.0` pins:
+Archinfra release `0.2.1` pins:
 
 - Upstream project: `pgsty/silo`
 - Upstream base release: `RELEASE.2026-09-03T13-18-01Z`
 - Security-fixed source commit: `1233254309b15571f101b2b26d531951ceaeef1e`
-- Security advisory addressed by the source pin: `SN-2026-011`
-- Archinfra image tag: `2026.09.03-sn011.123325430`
-- License: `AGPL-3.0-or-later`
+- Security advisory: `SN-2026-011`
 - Architectures: `linux/amd64`, `linux/arm64`
-- Default topology: 4-node distributed, 1 drive per node
-- Default exposure: `ClusterIP`
-- Default monitoring: metrics + ServiceMonitor + PrometheusRule when the CRDs exist
-- Default credentials: Kubernetes Secret; no password is passed to Helm argv
-- Offline installer runtime: no `jq` dependency
+- Default topology: 4-node distributed
+- S3 NodePort: `30093`
+- Console NodePort: `30092`
+- Default user: `silo-admin`
+- Password: generated at install time and stored in Kubernetes Secret
+- Monitoring: Metrics V3 + ServiceMonitor + PrometheusRule + Grafana Dashboard
 
-## Security release boundary
+## Authentication contract
 
-As of 2026-09-15, SILO's latest published Server release remains
-`RELEASE.2026-09-03T13-18-01Z`. SILO's security advisory for SN-2026-011 states
-that this published release is affected and that the fix starts at source commit
-`1233254309b15571f101b2b26d531951ceaeef1e`.
+The Server and Console use `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`. The installer reuses an existing `silo-root-credentials` Secret; otherwise it creates `silo-admin` and a 24-byte random password encoded as 48 hex characters. Passwords are not passed through Helm argv.
 
-For that reason Archinfra 0.2.0 does **not** redistribute the vulnerable published
-Server image. The build pipeline fetches the exact fixed source commit, verifies the
-40-character Git SHA, builds the classic SILO container for the requested architecture,
-and packages that locally built image into the offline installer.
+## Exposure contract
 
-This is intentionally an Archinfra security-patched source build, not an upstream
-SILO release. When SILO publishes a later Server release that explicitly contains
-SN-2026-011, move the baseline back to an upstream release after compatibility tests.
+0.2.1 defaults S3 and Console to NodePort for private-delivery operability: API `9000 -> 30093`, Console `9001 -> 30092`. Production environments must restrict reachability with firewalls, ACLs, security groups, NetworkPolicy or gateways. Enable TLS across untrusted networks.
+
+## Monitoring contract
+
+The maintained scrape endpoint is `/minio/metrics/v3`.
+
+V3 semantics:
+
+- cluster-scoped groups are duplicated by every scraped node; aggregate cluster state with `max()` / `min()`, not `sum()`;
+- zero values may be omitted; use zero-guards where a legitimate zero is meaningful;
+- API metric labels use `name` instead of the old V2 `api` label;
+- durations use seconds.
+
+Default monitoring objects are ServiceMonitor, PrometheusRule and a Grafana ConfigMap labeled `grafana_dashboard=1`.
+
+Alert coverage includes scrape loss, node/drive loss, erasure health, capacity warning/critical, stale usage data and S3 error conditions.
 
 ## MinIO compatibility contract
 
-SILO preserves the MinIO-facing compatibility contract: S3 API, `MINIO_*` variables,
-`minio_*` metrics, `/minio/*` routes and `.minio.sys` disk format.
+SILO preserves S3 API, `MINIO_*`, `minio_*`, `/minio/*` and `.minio.sys` compatibility. The classic image includes `mcli` and the legacy `mc` alias.
 
-The classic SILO image also ships `mcli` with the legacy `mc` compatibility alias.
-Existing client-side automation using commands such as the following is an explicit
-acceptance target:
+## Migration boundary
 
-```bash
-mc alias set storage http://silo:9000 ACCESS_KEY SECRET_KEY
-mc cp backup.tar storage/backups/
-mc mirror ./directory storage/bucket/path/
-mc ls storage/bucket/
-mc stat storage/bucket/backup.tar
-```
-
-Run `scripts/silo-mc-smoke.sh` after installation to exercise real `mc/mcli` upload,
-download, stat and mirror behavior against the deployed cluster.
-
-## Why fresh install and migration remain separate
-
-The existing `apps_minio-cluster` release uses the Bitnami MinIO chart. Even when
-the object data format is compatible, StatefulSet fields, image entrypoints, PVC
-template names, securityContext defaults and helper jobs can differ.
-
-Therefore 0.2.0 defines the SILO fresh-install baseline and does not automatically
-attach existing MinIO PVCs. Existing installations require a separate migration runbook.
-
-Do not run a mixed MinIO/SILO distributed cluster. Stop the old cluster as a unit,
-protect the data with a snapshot/copy, and start all SILO nodes on one pinned build.
-
-## Security defaults
-
-The delivery changes several unsafe defaults from the legacy MinIO package:
-
-- no hard-coded `minioadmin` password;
-- credentials live in a Kubernetes Secret;
-- reruns never rotate an existing Secret;
-- API and Console default to `ClusterIP`, not `NodePort`;
-- external exposure without TLS emits a warning;
-- non-root UID/GID `1001` is retained to ease Bitnami data ownership compatibility;
-- privilege escalation is disabled;
-- all Linux capabilities are dropped;
-- `RuntimeDefault` seccomp is enabled;
-- source commit and image tag are pinned;
-- build host and customer installer do not require `jq`;
-- generated `.run` installers ship standard SHA-256 checksum files.
+Do not directly Helm-upgrade the legacy Bitnami StatefulSet to the SILO chart. Protect data with a recoverable snapshot/copy and perform a controlled cutover. Never mix MinIO and SILO nodes inside one erasure set.
 
 ## Production acceptance gate
 
-Before using the build for a production workload, validate in the target Kubernetes
-and storage environment:
-
-- `mc cp` upload/download and `mc mirror`
-- PUT / GET / DELETE and multipart upload
-- presigned URLs, including CopyObject-related application flows
-- bucket policies and service accounts
-- versioning and lifecycle
-- SSE/KMS if used
-- object lock if used
-- Milvus and dataprotection S3 clients if applicable
-- Prometheus metrics and alerts
-- four-node quorum behavior
-- one-node loss and recovery
-- restart with existing `.minio.sys`
-- rollback against a protected snapshot/copy
+Validate `mc cp`/`mirror`, PUT/GET/DELETE/multipart, presigned URLs, IAM, versioning/lifecycle, Prometheus target discovery, V3 Dashboard population, alert evaluation, quorum, node loss/recovery and rollback.
 
 ## AGPL delivery note
 
-SILO server, Console and MCLI are AGPL-3.0-or-later. Commercial use and
-redistribution are permitted under that license, but delivery must preserve the
-license/attribution and satisfy corresponding-source obligations that apply to the
-distributed build. Keep `SILO_SOURCE.env`, the upstream source location, exact commit
-and notices with the delivery BOM. This is operational guidance, not legal advice.
+SILO server, Console and MCLI are AGPL-3.0-or-later. Preserve license/attribution and corresponding-source information with the delivery BOM.

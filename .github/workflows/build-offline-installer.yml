@@ -12,17 +12,15 @@ on:
       - ".github/workflows/build-offline-installer.yml"
       - "build.sh"
       - "install.sh"
-      - "README.md"
-      - "images/**"
-      - "charts/**"
+      - "images/image.json"
+      - "charts/minio/**"
   pull_request:
     paths:
       - ".github/workflows/build-offline-installer.yml"
       - "build.sh"
       - "install.sh"
-      - "README.md"
-      - "images/**"
-      - "charts/**"
+      - "images/image.json"
+      - "charts/minio/**"
 
 permissions:
   contents: write

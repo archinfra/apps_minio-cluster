@@ -19,7 +19,7 @@ auth:
   rootPasswordKey: rootPassword
 
 service:
-  type: ClusterIP
+  type: NodePort
   port: 9000
   nodePort: 30093
   annotations: {}
@@ -27,7 +27,7 @@ service:
 console:
   enabled: true
   service:
-    type: ClusterIP
+    type: NodePort
     port: 9001
     nodePort: 30092
     annotations: {}
@@ -85,6 +85,7 @@ metrics:
   serviceMonitor:
     enabled: true
     namespace: ""
+    path: /minio/metrics/v3
     interval: 30s
     scrapeTimeout: 10s
     labels:
@@ -93,6 +94,12 @@ metrics:
     enabled: true
     labels:
       monitoring.archinfra.io/stack: default
+  dashboards:
+    enabled: true
+    labels:
+      grafana_dashboard: "1"
+      monitoring.archinfra.io/stack: default
+    annotations: {}
 
 networkPolicy:
   enabled: false
