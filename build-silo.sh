@@ -83,8 +83,9 @@ prepare_dirs() {
   cp -R "${CHART_DIR}" "${PAYLOAD_DIR}/charts/"
   cp "${ROOT_DIR}/VERSION" "${SOURCE_ENV}" "${ROOT_DIR}/THIRD_PARTY_NOTICES.md" "${PAYLOAD_DIR}/meta/"
   cp "${ROOT_DIR}/docs/SILO_BASELINE.md" "${PAYLOAD_DIR}/docs/"
-  if [[ -f "${ROOT_DIR}/docs/SILO_RELEASE_0.2.0.md" ]]; then
-    cp "${ROOT_DIR}/docs/SILO_RELEASE_0.2.0.md" "${PAYLOAD_DIR}/docs/"
+  local release_doc="${ROOT_DIR}/docs/SILO_RELEASE_${VERSION}.md"
+  if [[ -f "${release_doc}" ]]; then
+    cp "${release_doc}" "${PAYLOAD_DIR}/docs/"
   fi
   if [[ -f "${ROOT_DIR}/scripts/silo-mc-smoke.sh" ]]; then
     cp "${ROOT_DIR}/scripts/silo-mc-smoke.sh" "${PAYLOAD_DIR}/docs/"

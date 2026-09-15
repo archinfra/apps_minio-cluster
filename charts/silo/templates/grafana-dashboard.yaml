@@ -1,0 +1,163 @@
+{{- if and .Values.metrics.enabled .Values.metrics.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "silo.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "silo.labels" . | nindent 4 }}
+    {{- with .Values.metrics.dashboards.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.dashboards.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  silo-overview.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 1,
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Online Nodes",
+          "gridPos": {"h": 5, "w": 4, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "max(minio_cluster_health_nodes_online_count{namespace=\"{{ .Release.Namespace }}\"})", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Offline Nodes",
+          "gridPos": {"h": 5, "w": 4, "x": 4, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "(max(minio_cluster_health_nodes_offline_count{namespace=\"{{ .Release.Namespace }}\"}) or (max(minio_cluster_health_nodes_online_count{namespace=\"{{ .Release.Namespace }}\"}) * 0))", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Online Drives",
+          "gridPos": {"h": 5, "w": 4, "x": 8, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "max(minio_cluster_health_drives_online_count{namespace=\"{{ .Release.Namespace }}\"})", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Offline Drives",
+          "gridPos": {"h": 5, "w": 4, "x": 12, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "(max(minio_cluster_health_drives_offline_count{namespace=\"{{ .Release.Namespace }}\"}) or (max(minio_cluster_health_nodes_online_count{namespace=\"{{ .Release.Namespace }}\"}) * 0))", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Free Usable Capacity",
+          "gridPos": {"h": 5, "w": 4, "x": 16, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+          "targets": [{"expr": "(max(minio_cluster_health_capacity_usable_free_bytes{namespace=\"{{ .Release.Namespace }}\"}) or (max(minio_cluster_health_capacity_usable_total_bytes{namespace=\"{{ .Release.Namespace }}\"}) * 0))", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Free Capacity %",
+          "gridPos": {"h": 5, "w": 4, "x": 20, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+          "targets": [{"expr": "100 * (((max(minio_cluster_health_capacity_usable_free_bytes{namespace=\"{{ .Release.Namespace }}\"})) or (max(minio_cluster_health_capacity_usable_total_bytes{namespace=\"{{ .Release.Namespace }}\"}) * 0)) / clamp_min(max(minio_cluster_health_capacity_usable_total_bytes{namespace=\"{{ .Release.Namespace }}\"}), 1))", "refId": "A"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "S3 Request Rate by Operation",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "sum by (name) (rate(minio_api_requests_total{namespace=\"{{ .Release.Namespace }}\"}[5m]))", "refId": "A"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "S3 Error Rate by Operation",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "sum by (name) (rate(minio_api_requests_errors_total{namespace=\"{{ .Release.Namespace }}\"}[5m]))", "refId": "A"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "S3 Traffic",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
+          "targets": [
+            {"expr": "sum by (server) (rate(minio_api_requests_traffic_received_bytes{namespace=\"{{ .Release.Namespace }}\"}[5m]))", "refId": "A"},
+            {"expr": "sum by (server) (rate(minio_api_requests_traffic_sent_bytes{namespace=\"{{ .Release.Namespace }}\"}[5m]))", "refId": "B"}
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Node CPU",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "sum by (server) (rate(minio_system_process_cpu_total_seconds{namespace=\"{{ .Release.Namespace }}\"}[5m]))", "refId": "A"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Node Resident Memory",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 21},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+          "targets": [{"expr": "max by (server) (minio_system_process_resident_memory_bytes{namespace=\"{{ .Release.Namespace }}\"})", "refId": "A"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Drive Used Bytes",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 21},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+          "targets": [{"expr": "max by (server,drive) (minio_system_drive_used_bytes{namespace=\"{{ .Release.Namespace }}\"})", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Buckets",
+          "gridPos": {"h": 5, "w": 6, "x": 0, "y": 29},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "(max(minio_cluster_usage_objects_buckets_count{namespace=\"{{ .Release.Namespace }}\"}) or (max(minio_cluster_usage_objects_since_last_update_seconds{namespace=\"{{ .Release.Namespace }}\"}) * 0))", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Objects",
+          "gridPos": {"h": 5, "w": 6, "x": 6, "y": 29},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "(max(minio_cluster_usage_objects_count{namespace=\"{{ .Release.Namespace }}\"}) or (max(minio_cluster_usage_objects_since_last_update_seconds{namespace=\"{{ .Release.Namespace }}\"}) * 0))", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Usage Data Age",
+          "gridPos": {"h": 5, "w": 6, "x": 12, "y": 29},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+          "targets": [{"expr": "max(minio_cluster_usage_objects_since_last_update_seconds{namespace=\"{{ .Release.Namespace }}\"})", "refId": "A"}]
+        },
+        {
+          "type": "stat",
+          "title": "Erasure Health",
+          "gridPos": {"h": 5, "w": 6, "x": 18, "y": 29},
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "targets": [{"expr": "((min(minio_cluster_erasure_set_overall_health{namespace=\"{{ .Release.Namespace }}\"})) or (max(minio_cluster_erasure_set_overall_write_quorum{namespace=\"{{ .Release.Namespace }}\"}) * 0))", "refId": "A"}]
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "tags": ["archinfra", "silo", "minio-compatible", "object-storage"],
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "label": "Prometheus",
+            "type": "datasource",
+            "query": "prometheus"
+          }
+        ]
+      },
+      "time": {"from": "now-6h", "to": "now"},
+      "title": "SILO Object Storage Overview",
+      "uid": "archinfra-silo-overview",
+      "version": 1
+    }
+{{- end }}

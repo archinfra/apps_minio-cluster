@@ -17,15 +17,93 @@ spec:
           for: 5m
           labels:
             severity: critical
+            category: availability
           annotations:
             summary: "SILO target is down"
             description: "Prometheus has been unable to scrape a SILO node for 5 minutes."
-        - alert: SiloDiskOffline
-          expr: minio_cluster_disk_offline_total{namespace="{{ .Release.Namespace }}"} > 0
+        - alert: SiloMetricsMissing
+          expr: absent(up{namespace="{{ .Release.Namespace }}",service="{{ include "silo.fullname" . }}"}) == 1
+          for: 10m
+          labels:
+            severity: critical
+            category: monitoring
+          annotations:
+            summary: "SILO metrics target is missing"
+            description: "No SILO target is present in Prometheus for 10 minutes."
+        - alert: SiloNodeOffline
+          expr: max(minio_cluster_health_nodes_offline_count{namespace="{{ .Release.Namespace }}"}) > 0
           for: 5m
           labels:
-            severity: warning
+            severity: critical
+            category: availability
           annotations:
-            summary: "SILO reports offline disks"
-            description: "At least one SILO disk has been offline for 5 minutes."
+            summary: "SILO reports offline nodes"
+            description: "At least one SILO node has been offline for 5 minutes."
+        - alert: SiloDriveOffline
+          expr: max(minio_cluster_health_drives_offline_count{namespace="{{ .Release.Namespace }}"}) > 0
+          for: 5m
+          labels:
+            severity: critical
+            category: storage
+          annotations:
+            summary: "SILO reports offline drives"
+            description: "At least one SILO drive has been offline for 5 minutes."
+        - alert: SiloErasureSetUnhealthy
+          expr: ((min(minio_cluster_erasure_set_overall_health{namespace="{{ .Release.Namespace }}"})) or (max(minio_cluster_erasure_set_overall_write_quorum{namespace="{{ .Release.Namespace }}"}) * 0)) < 1
+          for: 5m
+          labels:
+            severity: critical
+            category: storage
+          annotations:
+            summary: "SILO erasure set is unhealthy"
+            description: "The SILO erasure set has failed its overall health check for 5 minutes."
+    - name: silo.capacity
+      rules:
+        - alert: SiloCapacityLow
+          expr: 100 * (((max(minio_cluster_health_capacity_usable_free_bytes{namespace="{{ .Release.Namespace }}"})) or (max(minio_cluster_health_capacity_usable_total_bytes{namespace="{{ .Release.Namespace }}"}) * 0)) / clamp_min(max(minio_cluster_health_capacity_usable_total_bytes{namespace="{{ .Release.Namespace }}"}), 1)) < 15
+          for: 15m
+          labels:
+            severity: warning
+            category: capacity
+          annotations:
+            summary: "SILO usable capacity is below 15%"
+            description: "Usable free capacity has stayed below 15% for 15 minutes."
+        - alert: SiloCapacityCritical
+          expr: 100 * (((max(minio_cluster_health_capacity_usable_free_bytes{namespace="{{ .Release.Namespace }}"})) or (max(minio_cluster_health_capacity_usable_total_bytes{namespace="{{ .Release.Namespace }}"}) * 0)) / clamp_min(max(minio_cluster_health_capacity_usable_total_bytes{namespace="{{ .Release.Namespace }}"}), 1)) < 5
+          for: 10m
+          labels:
+            severity: critical
+            category: capacity
+          annotations:
+            summary: "SILO usable capacity is below 5%"
+            description: "Usable free capacity has stayed below 5% for 10 minutes."
+        - alert: SiloUsageDataStale
+          expr: max(minio_cluster_usage_objects_since_last_update_seconds{namespace="{{ .Release.Namespace }}"}) > 86400
+          for: 30m
+          labels:
+            severity: warning
+            category: capacity
+          annotations:
+            summary: "SILO usage scanner data is stale"
+            description: "Usage data has not been refreshed for more than 24 hours."
+    - name: silo.s3
+      rules:
+        - alert: SiloS3ErrorsDetected
+          expr: sum(increase(minio_api_requests_errors_total{namespace="{{ .Release.Namespace }}"}[10m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+            category: reliability
+          annotations:
+            summary: "SILO S3 request errors detected"
+            description: "SILO has returned S3 request errors during the last 10 minutes."
+        - alert: SiloS3ErrorRatioHigh
+          expr: (sum(rate(minio_api_requests_errors_total{namespace="{{ .Release.Namespace }}"}[5m])) / clamp_min(sum(rate(minio_api_requests_total{namespace="{{ .Release.Namespace }}"}[5m])), 0.001)) > 0.05
+          for: 10m
+          labels:
+            severity: critical
+            category: reliability
+          annotations:
+            summary: "SILO S3 error ratio is above 5%"
+            description: "S3 request error ratio has stayed above 5% for 10 minutes."
 {{- end }}

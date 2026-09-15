@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="silo-cluster"
-APP_VERSION="0.2.0"
+APP_VERSION="0.2.1"
 WORKDIR="/tmp/${APP_NAME}-installer"
 CHART_DIR="${WORKDIR}/charts/silo"
 IMAGE_INDEX="${WORKDIR}/images/image-index.tsv"
@@ -15,10 +15,10 @@ REPLICAS="4"
 DRIVES_PER_NODE="1"
 STORAGE_CLASS="nfs"
 STORAGE_SIZE="500Gi"
-SERVICE_TYPE="ClusterIP"
+SERVICE_TYPE="NodePort"
 API_NODE_PORT="30093"
 CONSOLE_ENABLED="true"
-CONSOLE_SERVICE_TYPE="ClusterIP"
+CONSOLE_SERVICE_TYPE="NodePort"
 CONSOLE_NODE_PORT="30092"
 AUTH_SECRET="silo-root-credentials"
 ROOT_USER="silo-admin"
@@ -29,6 +29,7 @@ TLS_SECRET=""
 RESOURCE_PROFILE="mid"
 ENABLE_SERVICEMONITOR="true"
 ENABLE_PROMETHEUSRULE="true"
+ENABLE_DASHBOARD="true"
 NETWORK_POLICY_ENABLED="false"
 REGISTRY_REPO="sealos.hub:5000/kube4"
 REGISTRY_REPO_EXPLICIT="false"
@@ -57,7 +58,7 @@ usage() {
 SILO Cluster Offline Installer ${APP_VERSION}
 
 Usage:
-  ./$(basename "$0") <install|status|uninstall|help> [options]
+  ./$(basename "$0") <install|status|credentials|endpoint|uninstall|help> [options]
 
 Core:
   -n, --namespace <ns>              default: ${NAMESPACE}
@@ -75,13 +76,15 @@ Credentials:
   --root-password <password>        used only when the Secret must be created
                                     if omitted, a random password is generated
   Existing Secrets are never rotated by this installer.
+  'credentials' prints the current Console/S3 root credentials from the Secret.
 
 Exposure:
-  --service-type <ClusterIP|NodePort|LoadBalancer>
-  --api-node-port <port>
-  --console-service-type <ClusterIP|NodePort|LoadBalancer>
-  --console-node-port <port>
+  --service-type <ClusterIP|NodePort|LoadBalancer>          default: ${SERVICE_TYPE}
+  --api-node-port <port>                                    default: ${API_NODE_PORT}
+  --console-service-type <ClusterIP|NodePort|LoadBalancer>  default: ${CONSOLE_SERVICE_TYPE}
+  --console-node-port <port>                                default: ${CONSOLE_NODE_PORT}
   --disable-console
+  'endpoint' prints cluster DNS and NodePort endpoints.
 
 Security:
   --enable-tls --tls-secret <name>  use an existing TLS Secret
@@ -90,6 +93,7 @@ Security:
 Monitoring:
   --disable-servicemonitor
   --disable-prometheusrule
+  --disable-dashboard
 
 Images:
   --registry <repo-prefix>          default: ${REGISTRY_REPO}
@@ -104,7 +108,8 @@ Other:
 
 Examples:
   ./$(basename "$0") install -y
-  ./$(basename "$0") install --service-type NodePort --console-service-type NodePort -y
+  ./$(basename "$0") credentials
+  ./$(basename "$0") endpoint
   ./$(basename "$0") install --auth-secret existing-s3-admin -y
   ./$(basename "$0") install --enable-tls --tls-secret silo-tls -y
 EOF
@@ -114,7 +119,7 @@ parse_args() {
   [[ $# -gt 0 ]] || return 0
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      install|status|uninstall|help) ACTION="$1"; shift ;;
+      install|status|credentials|endpoint|uninstall|help) ACTION="$1"; shift ;;
       -n|--namespace) NAMESPACE="$2"; shift 2 ;;
       --release-name) RELEASE_NAME="$2"; shift 2 ;;
       --mode) MODE="$2"; shift 2 ;;
@@ -136,6 +141,7 @@ parse_args() {
       --enable-network-policy) NETWORK_POLICY_ENABLED="true"; shift ;;
       --disable-servicemonitor) ENABLE_SERVICEMONITOR="false"; shift ;;
       --disable-prometheusrule) ENABLE_PROMETHEUSRULE="false"; shift ;;
+      --disable-dashboard) ENABLE_DASHBOARD="false"; shift ;;
       --registry) REGISTRY_REPO="$2"; REGISTRY_REPO_EXPLICIT="true"; shift 2 ;;
       --registry-user) REGISTRY_USER="$2"; shift 2 ;;
       --registry-password) REGISTRY_PASS="$2"; shift 2 ;;
@@ -156,6 +162,8 @@ validate() {
   case "${IMAGE_PULL_POLICY}" in Always|IfNotPresent|Never) ;; *) die "unsupported image pull policy" ;; esac
   [[ "${REPLICAS}" =~ ^[0-9]+$ ]] || die "replicas must be an integer"
   [[ "${DRIVES_PER_NODE}" =~ ^[0-9]+$ ]] || die "drives-per-node must be an integer"
+  [[ "${API_NODE_PORT}" =~ ^[0-9]+$ ]] || die "api node port must be an integer"
+  [[ "${CONSOLE_NODE_PORT}" =~ ^[0-9]+$ ]] || die "console node port must be an integer"
   if [[ "${MODE}" == "distributed" ]]; then
     (( REPLICAS >= 4 )) || die "distributed mode requires at least 4 replicas in this delivery baseline"
   else
@@ -164,8 +172,8 @@ validate() {
   if [[ "${TLS_ENABLED}" == "true" && -z "${TLS_SECRET}" ]]; then
     die "--tls-secret is required with --enable-tls"
   fi
-  if [[ "${SERVICE_TYPE}" != "ClusterIP" && "${TLS_ENABLED}" != "true" ]]; then
-    warn "API is externally exposed without TLS; production delivery should enable TLS"
+  if [[ ( "${SERVICE_TYPE}" != "ClusterIP" || "${CONSOLE_SERVICE_TYPE}" != "ClusterIP" ) && "${TLS_ENABLED}" != "true" ]]; then
+    warn "NodePort/LoadBalancer exposure is enabled without TLS; use network controls or enable TLS in production"
   fi
 }
 
@@ -179,13 +187,23 @@ apply_profile() {
 }
 
 check_deps() {
-  command -v helm >/dev/null 2>&1 || die "helm is required"
   command -v kubectl >/dev/null 2>&1 || die "kubectl is required"
-  command -v tar >/dev/null 2>&1 || die "tar is required"
-  command -v od >/dev/null 2>&1 || die "od is required"
-  if [[ "${ACTION}" == "install" && "${SKIP_IMAGE_PREPARE}" != "true" ]]; then
-    command -v docker >/dev/null 2>&1 || die "docker is required unless --skip-image-prepare is used"
-  fi
+  case "${ACTION}" in
+    install)
+      command -v helm >/dev/null 2>&1 || die "helm is required"
+      command -v tar >/dev/null 2>&1 || die "tar is required"
+      command -v od >/dev/null 2>&1 || die "od is required"
+      if [[ "${SKIP_IMAGE_PREPARE}" != "true" ]]; then
+        command -v docker >/dev/null 2>&1 || die "docker is required unless --skip-image-prepare is used"
+      fi
+      ;;
+    status|uninstall)
+      command -v helm >/dev/null 2>&1 || die "helm is required"
+      ;;
+    credentials)
+      command -v base64 >/dev/null 2>&1 || die "base64 is required"
+      ;;
+  esac
 }
 
 payload_start_offset() {
@@ -319,6 +337,7 @@ install_release() {
     --set-string "resources.limits.memory=${LIMIT_MEM}"
     --set "metrics.serviceMonitor.enabled=${ENABLE_SERVICEMONITOR}"
     --set "metrics.prometheusRule.enabled=${ENABLE_PROMETHEUSRULE}"
+    --set "metrics.dashboards.enabled=${ENABLE_DASHBOARD}"
     --set "networkPolicy.enabled=${NETWORK_POLICY_ENABLED}"
     --set "tls.enabled=${TLS_ENABLED}"
   )
@@ -331,15 +350,74 @@ install_release() {
   "${cmd[@]}"
 }
 
+show_credentials() {
+  kubectl get secret "${AUTH_SECRET}" -n "${NAMESPACE}" >/dev/null 2>&1 || die "Secret ${NAMESPACE}/${AUTH_SECRET} not found"
+  local user_b64 pass_b64 user pass
+  user_b64="$(kubectl get secret "${AUTH_SECRET}" -n "${NAMESPACE}" -o jsonpath='{.data.rootUser}')"
+  pass_b64="$(kubectl get secret "${AUTH_SECRET}" -n "${NAMESPACE}" -o jsonpath='{.data.rootPassword}')"
+  user="$(printf '%s' "${user_b64}" | base64 --decode)"
+  pass="$(printf '%s' "${pass_b64}" | base64 --decode)"
+  printf 'SILO credentials (%s/%s):\n' "${NAMESPACE}" "${AUTH_SECRET}"
+  printf '  user: %s\n' "${user}"
+  printf '  password: %s\n' "${pass}"
+}
+
+show_endpoint() {
+  local api_svc="${RELEASE_NAME}"
+  local console_svc="${RELEASE_NAME}-console"
+  local api_type api_port api_node_port api_port_name scheme node_ip
+  api_type="$(kubectl get svc "${api_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.type}' 2>/dev/null || true)"
+  [[ -n "${api_type}" ]] || die "Service ${NAMESPACE}/${api_svc} not found"
+  api_port="$(kubectl get svc "${api_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].port}')"
+  api_node_port="$(kubectl get svc "${api_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].nodePort}')"
+  api_port_name="$(kubectl get svc "${api_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].name}')"
+  scheme="http"
+  [[ "${api_port_name}" == "https" ]] && scheme="https"
+
+  printf 'S3 cluster endpoint:\n'
+  printf '  %s://%s.%s.svc.cluster.local:%s\n' "${scheme}" "${api_svc}" "${NAMESPACE}" "${api_port}"
+
+  if [[ "${api_type}" == "NodePort" && -n "${api_node_port}" ]]; then
+    node_ip="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+    printf 'S3 NodePort:\n'
+    printf '  %s://%s:%s\n' "${scheme}" "${node_ip:-<NODE_IP>}" "${api_node_port}"
+  fi
+
+  if kubectl get svc "${console_svc}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    local console_type console_port console_node_port console_port_name console_scheme
+    console_type="$(kubectl get svc "${console_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.type}')"
+    console_port="$(kubectl get svc "${console_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].port}')"
+    console_node_port="$(kubectl get svc "${console_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].nodePort}')"
+    console_port_name="$(kubectl get svc "${console_svc}" -n "${NAMESPACE}" -o jsonpath='{.spec.ports[0].name}')"
+    console_scheme="http"
+    [[ "${console_port_name}" == "https-console" ]] && console_scheme="https"
+    printf 'Console cluster endpoint:\n'
+    printf '  %s://%s.%s.svc.cluster.local:%s\n' "${console_scheme}" "${console_svc}" "${NAMESPACE}" "${console_port}"
+    if [[ "${console_type}" == "NodePort" && -n "${console_node_port}" ]]; then
+      [[ -n "${node_ip:-}" ]] || node_ip="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)"
+      printf 'Console NodePort:\n'
+      printf '  %s://%s:%s\n' "${console_scheme}" "${node_ip:-<NODE_IP>}" "${console_node_port}"
+    fi
+  fi
+}
+
 show_status() {
   helm status "${RELEASE_NAME}" -n "${NAMESPACE}" || true
   kubectl get pods,svc,pvc -n "${NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME}" || true
+  kubectl get configmap -n "${NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME},grafana_dashboard=1" || true
+  if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+    kubectl get servicemonitor -n "${NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME}" || true
+  fi
+  if kubectl get crd prometheusrules.monitoring.coreos.com >/dev/null 2>&1; then
+    kubectl get prometheusrule -n "${NAMESPACE}" -l "app.kubernetes.io/instance=${RELEASE_NAME}" || true
+  fi
 }
 
 confirm() {
   [[ "${AUTO_YES}" == "true" ]] && return
-  printf 'Action=%s namespace=%s release=%s mode=%s replicas=%s storage=%s/%s\n' \
-    "${ACTION}" "${NAMESPACE}" "${RELEASE_NAME}" "${MODE}" "${REPLICAS}" "${STORAGE_CLASS}" "${STORAGE_SIZE}"
+  printf 'Action=%s namespace=%s release=%s mode=%s replicas=%s storage=%s/%s service=%s:%s console=%s:%s\n' \
+    "${ACTION}" "${NAMESPACE}" "${RELEASE_NAME}" "${MODE}" "${REPLICAS}" "${STORAGE_CLASS}" "${STORAGE_SIZE}" \
+    "${SERVICE_TYPE}" "${API_NODE_PORT}" "${CONSOLE_SERVICE_TYPE}" "${CONSOLE_NODE_PORT}"
   read -r -p "Continue? [y/N] " answer
   [[ "${answer}" =~ ^[Yy]$ ]] || die "cancelled"
 }
@@ -357,10 +435,22 @@ main() {
       prepare_images
       install_release
       show_status
+      show_endpoint
+      printf '\nRun "%s credentials -n %s --release-name %s" to display the Console/S3 root credentials.\n' \
+        "$(basename "$0")" "${NAMESPACE}" "${RELEASE_NAME}"
       ;;
     status)
       check_deps
       show_status
+      show_endpoint || true
+      ;;
+    credentials)
+      check_deps
+      show_credentials
+      ;;
+    endpoint)
+      check_deps
+      show_endpoint
       ;;
     uninstall)
       check_deps
