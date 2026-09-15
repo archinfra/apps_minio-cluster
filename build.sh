@@ -172,7 +172,10 @@ package_payload() {
   tar -tzf "${PAYLOAD_FILE}" >/dev/null
 
   log "Assembling installer ${installer_path}"
-  cat "${INSTALLER_TEMPLATE}" "${PAYLOAD_FILE}" > "${installer_path}"
+  # ensure the payload starts on its own line: if install.sh does not end with
+  # a newline after __PAYLOAD_BELOW__, the payload would be concatenated onto the
+  # marker line and the runtime '^__PAYLOAD_BELOW__$' detection would fail.
+  { cat "${INSTALLER_TEMPLATE}"; printf '\n'; cat "${PAYLOAD_FILE}"; } > "${installer_path}"
   chmod +x "${installer_path}"
 
   sha256sum "${installer_path}" | awk '{print $1}' > "${checksum_path}"
