@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="silo-cluster"
-APP_VERSION="0.2.0-silo.1"
+APP_VERSION="0.2.0"
 WORKDIR="/tmp/${APP_NAME}-installer"
 CHART_DIR="${WORKDIR}/charts/silo"
 IMAGE_INDEX="${WORKDIR}/images/image-index.tsv"
