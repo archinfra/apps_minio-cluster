@@ -20,7 +20,6 @@ BUILD_ALL="false"
 
 log() { printf '[INFO] %s\n' "$*"; }
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
-
 cleanup() { rm -rf "${TEMP_DIR}"; }
 trap cleanup EXIT
 
@@ -79,13 +78,15 @@ check_requirements() {
 
 prepare_dirs() {
   rm -rf "${PAYLOAD_DIR}" "${PAYLOAD_FILE}"
-  mkdir -p "${PAYLOAD_DIR}/charts" "${PAYLOAD_DIR}/images" "${PAYLOAD_DIR}/meta" "${PAYLOAD_DIR}/docs" "${DIST_DIR}"
+  mkdir -p "${PAYLOAD_DIR}/charts" "${PAYLOAD_DIR}/images" "${PAYLOAD_DIR}/meta" "${PAYLOAD_DIR}/docs"
+  mkdir -p "${DIST_DIR}"
   cp -R "${CHART_DIR}" "${PAYLOAD_DIR}/charts/"
   cp "${ROOT_DIR}/VERSION" "${SOURCE_ENV}" "${ROOT_DIR}/THIRD_PARTY_NOTICES.md" "${PAYLOAD_DIR}/meta/"
   cp "${ROOT_DIR}/docs/SILO_BASELINE.md" "${PAYLOAD_DIR}/docs/"
-  if [[ -f "${ROOT_DIR}/docs/SILO_RELEASE_0.2.0.md" ]]; then
-    cp "${ROOT_DIR}/docs/SILO_RELEASE_0.2.0.md" "${PAYLOAD_DIR}/docs/"
-  fi
+
+  local release_doc="${ROOT_DIR}/docs/SILO_RELEASE_${VERSION}.md"
+  [[ ! -f "${release_doc}" ]] || cp "${release_doc}" "${PAYLOAD_DIR}/docs/"
+
   if [[ -f "${ROOT_DIR}/scripts/silo-mc-smoke.sh" ]]; then
     cp "${ROOT_DIR}/scripts/silo-mc-smoke.sh" "${PAYLOAD_DIR}/docs/"
   fi
@@ -166,9 +167,11 @@ main() {
   parse_args "$@"
   load_source_metadata
   check_requirements
+  log "SILO delivery version: ${VERSION}"
   log "SILO base release: ${SILO_BASE_RELEASE}"
   log "Security advisory: ${SILO_SECURITY_ADVISORY}"
   log "Pinned source: ${SILO_SOURCE_COMMIT}"
+
   if [[ "${BUILD_ALL}" == "true" ]]; then
     package_one amd64 linux/amd64
     package_one arm64 linux/arm64

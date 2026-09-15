@@ -19,7 +19,7 @@ auth:
   rootPasswordKey: rootPassword
 
 service:
-  type: ClusterIP
+  type: NodePort
   port: 9000
   nodePort: 30093
   annotations: {}
@@ -27,7 +27,7 @@ service:
 console:
   enabled: true
   service:
-    type: ClusterIP
+    type: NodePort
     port: 9001
     nodePort: 30092
     annotations: {}
@@ -85,14 +85,28 @@ metrics:
   serviceMonitor:
     enabled: true
     namespace: ""
+    path: /minio/metrics/v3
     interval: 30s
     scrapeTimeout: 10s
     labels:
       monitoring.archinfra.io/stack: default
   prometheusRule:
     enabled: true
+    namespace: ""
     labels:
       monitoring.archinfra.io/stack: default
+    capacityWarningPercent: 15
+    capacityCriticalPercent: 5
+    usageDataStaleSeconds: 86400
+    s3ErrorRateWarning: 0.05
+    s3ErrorMinRps: 1
+  dashboards:
+    enabled: true
+    namespace: ""
+    labels:
+      grafana_dashboard: "1"
+      monitoring.archinfra.io/stack: default
+    annotations: {}
 
 networkPolicy:
   enabled: false

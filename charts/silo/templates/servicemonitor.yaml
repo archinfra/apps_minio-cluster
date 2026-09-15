@@ -21,7 +21,7 @@ spec:
   endpoints:
     - port: {{ ternary "https" "http" .Values.tls.enabled }}
       scheme: {{ ternary "https" "http" .Values.tls.enabled }}
-      path: /minio/v2/metrics/node
+      path: {{ .Values.metrics.serviceMonitor.path | quote }}
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
 {{- end }}
