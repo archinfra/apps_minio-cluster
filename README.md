@@ -2,13 +2,13 @@
 
 S3 兼容对象存储的离线私有化交付仓库。
 
-> **当前新部署基线：PGSTY SILO 0.2.1。**
+> **当前新部署基线：PGSTY SILO 0.2.2。**
 >
 > 旧 Bitnami MinIO 2025.7.23 已进入 legacy 路径，仅用于已有环境维护、回滚和迁移演练。不要再把旧 MinIO 作为新的生产交付基线。
 
 ## 当前版本
 
-Archinfra `0.2.1`：
+Archinfra `0.2.2`：
 
 - Backend：PGSTY SILO
 - Upstream base：`RELEASE.2026-09-03T13-18-01Z`
@@ -18,7 +18,7 @@ Archinfra `0.2.1`：
 - 架构：`amd64` / `arm64`
 - 默认拓扑：4 节点 distributed，1 drive/node
 - 默认存储：`nfs`，每节点 `500Gi`
-- S3 API：`NodePort 30093`
+- S3 API：`NodePort 30095`
 - Web Console：`NodePort 30092`
 - 默认用户：`silo-admin`
 - 默认密码：首次安装随机生成并写入 `silo-root-credentials`
@@ -27,16 +27,16 @@ Archinfra `0.2.1`：
 
 详细版本和安全边界见：
 
-- `docs/SILO_RELEASE_0.2.1.md`
+- `docs/SILO_RELEASE_0.2.2.md`
 - `docs/SILO_BASELINE.md`
 - `SILO_SOURCE.env`
 
 ## 快速安装
 
 ```bash
-sha256sum -c silo-cluster-installer-0.2.1-amd64.run.sha256
-chmod +x silo-cluster-installer-0.2.1-amd64.run
-./silo-cluster-installer-0.2.1-amd64.run install -y
+sha256sum -c silo-cluster-installer-0.2.2-amd64.run.sha256
+chmod +x silo-cluster-installer-0.2.2-amd64.run
+./silo-cluster-installer-0.2.2-amd64.run install -y
 ```
 
 默认部署契约：
@@ -46,7 +46,7 @@ chmod +x silo-cluster-installer-0.2.1-amd64.run
 - replicas：`4`
 - storageClass：`nfs`
 - storage：`500Gi` / node
-- S3 API：`http://<NODE_IP>:30093`
+- S3 API：`http://<NODE_IP>:30095`
 - Console：`http://<NODE_IP>:30092`
 - Secret：`silo-root-credentials`
 
@@ -66,19 +66,19 @@ SILO Console 与 S3 root 凭据共用 Kubernetes Secret。
 查看当前凭据：
 
 ```bash
-./silo-cluster-installer-0.2.1-amd64.run credentials
+./silo-cluster-installer-0.2.2-amd64.run credentials
 ```
 
 查看访问地址：
 
 ```bash
-./silo-cluster-installer-0.2.1-amd64.run endpoint
+./silo-cluster-installer-0.2.2-amd64.run endpoint
 ```
 
 也可以显式提供密码：
 
 ```bash
-./silo-cluster-installer-0.2.1-amd64.run install \
+./silo-cluster-installer-0.2.2-amd64.run install \
   --root-user silo-admin \
   --root-password 'CHANGE-ME-STRONG-PASSWORD' \
   -y
@@ -90,13 +90,13 @@ SILO Console 与 S3 root 凭据共用 Kubernetes Secret。
 
 | 接口 | Pod/Service Port | NodePort |
 |---|---:|---:|
-| S3 API | 9000 | 30093 |
+| S3 API | 9000 | 30095 |
 | Web Console | 9001 | 30092 |
 
 启用 TLS：
 
 ```bash
-./silo-cluster-installer-0.2.1-amd64.run install \
+./silo-cluster-installer-0.2.2-amd64.run install \
   --enable-tls \
   --tls-secret silo-tls \
   -y
@@ -124,7 +124,7 @@ CI 会验证 `silo --version`、`mc --version` 和 `mc cp --help`。
 
 ## 监控
 
-0.2.1 将监控基线切换为 SILO/MinIO **Metrics V3**：
+0.2.2 使用 SILO/MinIO **Metrics V3**：
 
 ```text
 /minio/metrics/v3
@@ -149,10 +149,10 @@ V3 的 cluster 指标会在多个节点重复暴露，所以 Dashboard/Rules 对
 ## 运维命令
 
 ```bash
-./silo-cluster-installer-0.2.1-amd64.run status
-./silo-cluster-installer-0.2.1-amd64.run credentials
-./silo-cluster-installer-0.2.1-amd64.run endpoint
-./silo-cluster-installer-0.2.1-amd64.run uninstall
+./silo-cluster-installer-0.2.2-amd64.run status
+./silo-cluster-installer-0.2.2-amd64.run credentials
+./silo-cluster-installer-0.2.2-amd64.run endpoint
+./silo-cluster-installer-0.2.2-amd64.run uninstall
 ```
 
 卸载时 PVC 和凭据 Secret 默认保留。
@@ -172,7 +172,7 @@ V3 的 cluster 指标会在多个节点重复暴露，所以 Dashboard/Rules 对
 - `.run` 提供 SHA-256
 - Silo 构建/安装流程不依赖 `jq`
 
-注意：0.2.1 按交付要求默认打开 NodePort；生产环境必须配合网络边界控制，跨不可信网络时应启用 TLS。
+注意：0.2.2 按交付要求默认打开 NodePort；生产环境必须配合网络边界控制，跨不可信网络时应启用 TLS。
 
 ## 现有 MinIO 怎么办
 
@@ -190,12 +190,12 @@ V3 的 cluster 指标会在多个节点重复暴露，所以 Dashboard/Rules 对
 构建产物：
 
 ```text
-dist/silo-cluster-installer-0.2.1-amd64.run
-dist/silo-cluster-installer-0.2.1-amd64.run.sha256
-dist/silo-cluster-installer-0.2.1-arm64.run
-dist/silo-cluster-installer-0.2.1-arm64.run.sha256
+dist/silo-cluster-installer-0.2.2-amd64.run
+dist/silo-cluster-installer-0.2.2-amd64.run.sha256
+dist/silo-cluster-installer-0.2.2-arm64.run
+dist/silo-cluster-installer-0.2.2-arm64.run.sha256
 ```
 
 ## Release gate
 
-合并/发布前必须满足 shell syntax、固定源码 SHA、Helm lint/render、NodePort、Metrics V3、Grafana Dashboard、关键 PrometheusRule、双架构 source build、`mc` 兼容和 installer SHA-256 校验。
+合并/发布前必须满足 shell syntax、固定源码 SHA、版本一致性、tag/version 一致性、Helm lint/render、NodePort、Metrics V3、Grafana Dashboard、关键 PrometheusRule、双架构 source build、`mc` 兼容和 installer SHA-256 校验。
