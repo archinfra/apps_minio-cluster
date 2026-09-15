@@ -1,0 +1,81 @@
+name: Build SILO Offline Installer
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "VERSION"
+      - "build-silo.sh"
+      - "install-silo.sh"
+      - "charts/silo/**"
+      - "images/silo-image-index.tsv"
+      - "docs/SILO_BASELINE.md"
+      - ".github/workflows/build-silo-offline-installer.yml"
+  push:
+    branches: [main, master]
+    tags: ["silo-v*"]
+    paths:
+      - "VERSION"
+      - "build-silo.sh"
+      - "install-silo.sh"
+      - "charts/silo/**"
+      - "images/silo-image-index.tsv"
+      - "docs/SILO_BASELINE.md"
+      - ".github/workflows/build-silo-offline-installer.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: |
+          bash -n build-silo.sh
+          bash -n install-silo.sh
+      - name: Helm lint and render
+        run: |
+          helm lint charts/silo
+          helm template silo charts/silo \
+            --namespace aict \
+            --set auth.existingSecret=silo-root-credentials \
+            --set replicas=4 >/tmp/silo.yaml
+          test -s /tmp/silo.yaml
+
+  build:
+    needs: static-validation
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Build offline installer
+        run: |
+          chmod +x build-silo.sh install-silo.sh
+          ./build-silo.sh --arch "${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: silo-cluster-installer-${{ matrix.arch }}
+          path: |
+            dist/silo-cluster-installer-*.run
+            dist/silo-cluster-installer-*.run.sha256
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/silo-v')
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
