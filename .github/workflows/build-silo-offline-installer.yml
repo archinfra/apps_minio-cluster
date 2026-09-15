@@ -44,11 +44,21 @@ jobs:
           bash -n build-silo.sh
           bash -n install-silo.sh
           bash -n scripts/silo-mc-smoke.sh
-      - name: Validate pinned source metadata
+      - name: Validate release metadata
+        shell: bash
         run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           grep -Eq '^SILO_SOURCE_COMMIT=[0-9a-f]{40}$' SILO_SOURCE.env
           grep -q '^SILO_SECURITY_ADVISORY=SN-2026-011$' SILO_SOURCE.env
-          test "$(cat VERSION)" = "0.2.1"
+          chart_version="$(awk '$1 == "version:" { print $2; exit }' charts/silo/Chart.yaml)"
+          test "${chart_version}" = "${version}"
+          grep -Fqx "APP_VERSION=\"${version}\"" install-silo.sh
+          test -f "docs/SILO_RELEASE_${version}.md"
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            test "${GITHUB_REF_NAME}" = "silo-v${version}"
+          fi
       - name: Helm lint and render
         run: |
           helm lint charts/silo
@@ -57,7 +67,7 @@ jobs:
             --set auth.existingSecret=silo-root-credentials \
             --set replicas=4 >/tmp/silo.yaml
           test -s /tmp/silo.yaml
-          grep -q 'nodePort: 30093' /tmp/silo.yaml
+          grep -q 'nodePort: 30095' /tmp/silo.yaml
           grep -q 'nodePort: 30092' /tmp/silo.yaml
           grep -q 'path: "/minio/metrics/v3"' /tmp/silo.yaml
           grep -q 'grafana_dashboard: "1"' /tmp/silo.yaml

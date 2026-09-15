@@ -4,7 +4,7 @@
 
 New object-storage deliveries use PGSTY SILO as the maintained MinIO-compatible backend. The legacy Bitnami MinIO path remains only for rollback and controlled migration work.
 
-Archinfra release `0.2.1` pins:
+Archinfra release `0.2.2` pins:
 
 - Upstream project: `pgsty/silo`
 - Upstream base release: `RELEASE.2026-09-03T13-18-01Z`
@@ -12,7 +12,7 @@ Archinfra release `0.2.1` pins:
 - Security advisory: `SN-2026-011`
 - Architectures: `linux/amd64`, `linux/arm64`
 - Default topology: 4-node distributed
-- S3 NodePort: `30093`
+- S3 NodePort: `30095`
 - Console NodePort: `30092`
 - Default user: `silo-admin`
 - Password: generated at install time and stored in Kubernetes Secret
@@ -24,7 +24,7 @@ The Server and Console use `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`. The instal
 
 ## Exposure contract
 
-0.2.1 defaults S3 and Console to NodePort for private-delivery operability: API `9000 -> 30093`, Console `9001 -> 30092`. Production environments must restrict reachability with firewalls, ACLs, security groups, NetworkPolicy or gateways. Enable TLS across untrusted networks.
+0.2.2 defaults S3 and Console to NodePort for private-delivery operability: API `9000 -> 30095`, Console `9001 -> 30092`. Production environments must restrict reachability with firewalls, ACLs, security groups, NetworkPolicy or gateways. Enable TLS across untrusted networks.
 
 ## Monitoring contract
 
