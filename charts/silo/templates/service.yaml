@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "silo.fullname" . }}
+  labels:
+    {{- include "silo.labels" . | nindent 4 }}
+    monitoring: "true"
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: {{ ternary "https" "http" .Values.tls.enabled }}
+      port: {{ .Values.service.port }}
+      targetPort: api
+      protocol: TCP
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "silo.selectorLabels" . | nindent 4 }}
+---
+{{- if .Values.console.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "silo.fullname" . }}-console
+  labels:
+    {{- include "silo.labels" . | nindent 4 }}
+  {{- with .Values.console.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.console.service.type }}
+  ports:
+    - name: {{ ternary "https-console" "http-console" .Values.tls.enabled }}
+      port: {{ .Values.console.service.port }}
+      targetPort: console
+      protocol: TCP
+      {{- if eq .Values.console.service.type "NodePort" }}
+      nodePort: {{ .Values.console.service.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "silo.selectorLabels" . | nindent 4 }}
+{{- end }}

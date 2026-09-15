@@ -1,0 +1,107 @@
+nameOverride: ""
+fullnameOverride: ""
+
+clusterDomain: cluster.local
+
+image:
+  repository: sealos.hub:5000/kube4/silo
+  tag: 2026.09.03-sn011.123325430
+  pullPolicy: IfNotPresent
+
+mode: distributed
+replicas: 4
+drivesPerNode: 1
+mountPath: /export
+
+auth:
+  existingSecret: silo-root-credentials
+  rootUserKey: rootUser
+  rootPasswordKey: rootPassword
+
+service:
+  type: ClusterIP
+  port: 9000
+  nodePort: 30093
+  annotations: {}
+
+console:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 9001
+    nodePort: 30092
+    annotations: {}
+
+persistence:
+  enabled: true
+  storageClass: nfs
+  size: 500Gi
+  accessMode: ReadWriteOnce
+  annotations: {}
+
+tls:
+  enabled: false
+  existingSecret: ""
+  publicCrt: public.crt
+  privateKey: private.key
+
+podSecurityContext:
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  fsGroupChangePolicy: OnRootMismatch
+
+containerSecurityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "4"
+    memory: 8Gi
+
+terminationGracePeriodSeconds: 120
+
+podAntiAffinity:
+  enabled: true
+  required: false
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+metrics:
+  enabled: true
+  public: true
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels:
+      monitoring.archinfra.io/stack: default
+  prometheusRule:
+    enabled: true
+    labels:
+      monitoring.archinfra.io/stack: default
+
+networkPolicy:
+  enabled: false
+  allowFromSameNamespace: true
+  extraIngress: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+podLabels: {}
+podAnnotations: {}

@@ -1,0 +1,110 @@
+name: Build SILO Offline Installer
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "VERSION"
+      - "SILO_SOURCE.env"
+      - "build-silo.sh"
+      - "install-silo.sh"
+      - "scripts/silo-mc-smoke.sh"
+      - "charts/silo/**"
+      - "images/silo-image-index.tsv"
+      - "docs/SILO_BASELINE.md"
+      - "docs/SILO_RELEASE_0.2.0.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - ".github/workflows/build-silo-offline-installer.yml"
+  push:
+    branches: [main, master]
+    tags: ["silo-v*"]
+    paths:
+      - "VERSION"
+      - "SILO_SOURCE.env"
+      - "build-silo.sh"
+      - "install-silo.sh"
+      - "scripts/silo-mc-smoke.sh"
+      - "charts/silo/**"
+      - "images/silo-image-index.tsv"
+      - "docs/SILO_BASELINE.md"
+      - "docs/SILO_RELEASE_0.2.0.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - ".github/workflows/build-silo-offline-installer.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: |
+          bash -n build-silo.sh
+          bash -n install-silo.sh
+          bash -n scripts/silo-mc-smoke.sh
+      - name: Validate pinned source metadata
+        run: |
+          grep -Eq '^SILO_SOURCE_COMMIT=[0-9a-f]{40}$' SILO_SOURCE.env
+          grep -q '^SILO_SECURITY_ADVISORY=SN-2026-011$' SILO_SOURCE.env
+          test "$(cat VERSION)" = "0.2.0"
+      - name: Helm lint and render
+        run: |
+          helm lint charts/silo
+          helm template silo charts/silo \
+            --namespace aict \
+            --set auth.existingSecret=silo-root-credentials \
+            --set replicas=4 >/tmp/silo.yaml
+          test -s /tmp/silo.yaml
+
+  build:
+    needs: static-validation
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.1"
+          cache: false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Build offline installer from pinned SILO source
+        run: |
+          chmod +x build-silo.sh install-silo.sh scripts/silo-mc-smoke.sh
+          ./build-silo.sh --arch "${{ matrix.arch }}"
+      - name: Verify server and legacy mc compatibility entrypoint
+        run: |
+          image="archinfra-payload/silo:$(cat VERSION)-${{ matrix.arch }}"
+          docker run --rm --platform "linux/${{ matrix.arch }}" --entrypoint /usr/bin/silo "${image}" --version
+          docker run --rm --platform "linux/${{ matrix.arch }}" --entrypoint /usr/bin/mc "${image}" --version
+          docker run --rm --platform "linux/${{ matrix.arch }}" --entrypoint /usr/bin/mc "${image}" cp --help >/dev/null
+      - name: Verify installer checksum
+        run: |
+          cd dist
+          sha256sum -c *.run.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: silo-cluster-installer-${{ matrix.arch }}
+          path: |
+            dist/silo-cluster-installer-*.run
+            dist/silo-cluster-installer-*.run.sha256
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/silo-v')
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
