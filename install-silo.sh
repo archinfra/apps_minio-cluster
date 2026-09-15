@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 APP_NAME="silo-cluster"
-APP_VERSION="0.2.1"
+APP_VERSION="0.2.2"
 WORKDIR="/tmp/${APP_NAME}-installer"
 CHART_DIR="${WORKDIR}/charts/silo"
 IMAGE_INDEX="${WORKDIR}/images/image-index.tsv"
@@ -16,7 +16,7 @@ DRIVES_PER_NODE="1"
 STORAGE_CLASS="nfs"
 STORAGE_SIZE="500Gi"
 SERVICE_TYPE="NodePort"
-API_NODE_PORT="30093"
+API_NODE_PORT="30095"
 CONSOLE_ENABLED="true"
 CONSOLE_SERVICE_TYPE="NodePort"
 CONSOLE_NODE_PORT="30092"
