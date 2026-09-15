@@ -2,8 +2,8 @@ apiVersion: v2
 name: silo
 description: Archinfra offline delivery chart for PGSTY SILO, a maintained MinIO-compatible object storage fork.
 type: application
-version: 0.1.0
-appVersion: RELEASE.2026-09-03T13-18-01Z
+version: 0.2.0
+appVersion: 2026.09.03-sn011.123325430
 home: https://silo.pgsty.com/
 sources:
   - https://github.com/pgsty/silo
